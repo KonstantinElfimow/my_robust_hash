@@ -1,8 +1,7 @@
 import numpy as np
 import cv2
-import sys
 import os.path
-import skimage.io as skio
+from skimage import io
 
 
 def my_dct(grayMat: np.uint8):
@@ -32,16 +31,27 @@ def my_hamming(h_1: np.uint64, h_2: np.uint64) -> np.uint8:
     return d
 
 
-def my_PCA(data: np.array, k: int) -> np.array:
-    # Центрирование данных
-    centered_data = data - np.mean(data, axis=0)
-    print(centered_data.shape)
+def compare_images(old_image: np.array, new_image: np.array):
+    reconstructed_image = np.zeros(old_image.shape, dtype=np.uint8)
+    count = 0
+    for i in range(0, old_image.shape[0], 8):
+        for j in range(0, old_image.shape[1], 8):
+            reconstructed_image[i:i + 8, j:j + 8] = new_image[count, :, :]
+            count += 1
+    io.imshow(np.hstack((old_image, reconstructed_image)))
+    io.show()
+
+
+def my_PCA(vectors: np.array, k: int) -> np.array:
+    # Вычисляем среднее по векторам
+    mean = np.mean(vectors, axis=0)
+    # Центрирование данных (sum(Xi)=0)
+    centered_data = vectors - mean
     # Вычисление ковариационной матрицы
     covariance_matrix = np.cov(centered_data, rowvar=False)
-    print(centered_data.shape)
     # Вычисление собственных значений и собственных векторов ковариационной матрицы
     eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
-
+    del covariance_matrix
     # Сортировка собственных векторов в порядке убывания собственных значений
     indices = np.argsort(eigenvalues)[::-1]
     sorted_eigenvalues, sorted_eigenvectors = eigenvalues[indices], eigenvectors[:, indices]
@@ -52,14 +62,15 @@ def my_PCA(data: np.array, k: int) -> np.array:
     # Преобразование данных в новое пространство признаков
     X_reduced = np.dot(centered_data, selected_eigenvectors)
     # Обратное преобразование данных в исходное пространство признаков
-    X_recovered = np.dot(X_reduced, selected_eigenvectors.T) + np.mean(data, axis=0)
+    X_recovered = np.dot(X_reduced, selected_eigenvectors.T) + mean
     return X_recovered
 
 
 def my_robust_hash(file: str) -> np.array:
     # Загрузка изображения
     img = cv2.imread(file)
-    img = cv2.cvtColor(cv2.resize(img, (64, 64)), cv2.COLOR_BGR2GRAY)
+    # Преобразуем в оттенки серого и масштабируем изображение
+    img = cv2.cvtColor(cv2.resize(img, (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
     # Разбиение на блоки размером 8x8
     blocks = []
     for i in range(0, img.shape[0], 8):
@@ -67,18 +78,20 @@ def my_robust_hash(file: str) -> np.array:
             block = img[i: i + 8, j: j + 8]
             blocks.append(block)
     vectors = np.array(blocks, dtype=np.uint8).reshape(-1, 64)
+    del blocks
 
-    reconstructed = np.uint8(my_PCA(vectors, 3))
+    reconstructed = np.uint8(my_PCA(vectors, 16))
     # print('Новое', reconstructed[:])
     # print('Старое', vectors[:])
-    significant_blocks = np.array(reconstructed.reshape(-1, 8, 8), dtype=np.uint8)
+    reconstructed = np.array(reconstructed.reshape(-1, 8, 8), dtype=np.uint8)
+
+    compare_images(img, reconstructed)
 
     # Вычисление pHash
     hash_values = []
-    for block in significant_blocks:
+    for block in reconstructed:
         dct = my_dct(block)
         dct = dct.reshape(-1)
-        # print(dct, dct.mean())
 
         x = (np.arange(64))[dct >= dct.mean()]
         h = np.uint64(np.sum(np.power(2, x)))
@@ -93,7 +106,9 @@ def main():
     files = [os.path.join(directory, name) for name in os.listdir(directory)
              if os.path.isfile(os.path.join(directory, name))]
     hashes = [my_robust_hash(image) for image in files]
-    print(hashes)
+
+    for h in hashes:
+        print(h)
 
 
 if __name__ == '__main__':
