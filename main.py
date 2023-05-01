@@ -8,18 +8,34 @@ def get_ascii_symbols() -> list[str]:
     return [chr(i) for i in range(32, 128)]
 
 
-def sender(key_generator: int):
+class Memorize:
+    def __init__(self, func):
+        self.__func = func
+        self.__cache = {}
+
+    def __call__(self, arg):
+        if arg not in self.__cache:
+            self.__cache[arg] = self.__func(arg)
+        return self.__cache[arg]
+
+
+@Memorize
+def calculate_robust_hash_for_image(file: str) -> np.array:
+    hash_dim = 48
+    h = my_robust_hash(file, hash_dim=hash_dim)
+    return h
+
+
+def sender(key_generator: int, recourse: str, message: str):
     np.random.seed(key_generator)
 
-    # directory = sys.argv[1]
-    directory = './images'
-    files = [os.path.join(directory, name) for name in os.listdir(directory)
-             if os.path.isfile(os.path.join(directory, name))]
+    files = [os.path.join(recourse, name) for name in os.listdir(recourse)
+             if os.path.isfile(os.path.join(recourse, name))]
 
     unique_hashes = []
     for file in files:
-        h = my_robust_hash(file, hash_dim=48)
-        unique_hashes.extend(h)
+        h = calculate_robust_hash_for_image(file)
+
     unique_hashes = list(set(unique_hashes))
 
     ascii_symbols = get_ascii_symbols()
@@ -39,7 +55,9 @@ def receiver():
 
 def main():
     key_generator = 215351
-    sender(key_generator)
+    # recourse = sys.argv[1]
+    recourse = './images'
+    # sender(key_generator, recourse, message)
     # receiver()
 
 

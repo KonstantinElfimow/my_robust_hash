@@ -44,12 +44,12 @@ def my_robust_hash(file: str, *, hash_dim: int = 1) -> np.array:
     # Восстановленные блоки 8x8
     reconstructed = np.array(my_PCA(vectors, vectors.shape[1] // 4), dtype=np.uint8).reshape(-1, 8, 8)
 
-    # Оценка информативности блоков по дисперсии
+    # Оценка информативности восстановленных блоков по дисперсии
     block_scores = np.array([np.var(block, axis=(0, 1)) for block in reconstructed])
 
     # Выбор наиболее информативных блоков
     best_block_indices = (block_scores.argsort()[::-1])[:hash_dim]
-    best_blocks = reconstructed[best_block_indices]
+    best_blocks = reconstructed[best_block_indices].copy()
 
     # Вычисление pHash для самых информативных восстановленных блоков
     hash_values = np.array([my_pHash(block) for block in best_blocks])
